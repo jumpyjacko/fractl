@@ -42,7 +42,8 @@ fn main() {
     render(
         image_size,
         constant,
-        200,
+        1.0,
+        500,
         output_buffer,
         grayscale,
         Fractal::Julia,
@@ -67,8 +68,8 @@ fn modulus_squared(z: Vec2) -> f64 {
 }
 
 // Zn = Zn-1 + C
-fn iterate_to_max_julia(initial_z: Vec2, constant: Vec2, max_iterations: usize) -> usize {
-    let mut zn = initial_z;
+fn iterate_to_max_julia(initial_z: Vec2, constant: Vec2, fractal_zoom: f64, max_iterations: usize) -> usize {
+    let mut zn = Vec2 { x: initial_z.x / fractal_zoom, y: initial_z.y / fractal_zoom };
     let mut iteration = 0;
     while modulus_squared(zn) < 4.0 && iteration < max_iterations {
         zn = compute_next_julia(zn, constant);
@@ -81,6 +82,7 @@ fn iterate_to_max_julia(initial_z: Vec2, constant: Vec2, max_iterations: usize) 
 fn render(
     render_size: IVec2,
     constant: Vec2,
+    fractal_zoom: f64,
     max_iterations: usize,
     buffer: RgbImage,
     gradient: Gradient,
@@ -101,6 +103,7 @@ fn render(
                         y: pixel_y,
                     },
                     constant,
+                    fractal_zoom,
                     max_iterations,
                 ),
                 _ => todo!(),
