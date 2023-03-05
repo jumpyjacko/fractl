@@ -1,5 +1,8 @@
 use colorgrad::{Color, Gradient};
 use image::{ImageBuffer, Rgb, RgbImage};
+use rayon::prelude::*;
+use std::sync::{Arc, Mutex};
+use std::{time::Instant};
 
 #[derive(Debug, Clone, Copy)]
 struct Vec2 {
@@ -19,7 +22,7 @@ enum Fractal {
 }
 
 fn main() {
-    let image_size = IVec2 { x: 1920, y: 1080 };
+    let image_size = IVec2 { x: 2560, y: 1440 };
     let grayscale = colorgrad::CustomGradient::new()
         .colors(&[
             Color::from_rgba8(0, 0, 0, 255),
@@ -35,6 +38,7 @@ fn main() {
     // let constant = Vec2 { x: -0.4, y: 0.6};
     let constant = Vec2 { x: -0.8, y: 0.156 };
 
+    let timer = Instant::now();
     render(
         image_size,
         constant,
@@ -44,6 +48,8 @@ fn main() {
         Fractal::Julia,
         "julia.png",
     );
+    let duration = timer.elapsed().as_millis();
+    println!("calculation duration: {} ms", duration);
 }
 
 fn compute_next_julia(current: Vec2, constant: Vec2) -> Vec2 {
@@ -76,14 +82,15 @@ fn render(
     render_size: IVec2,
     constant: Vec2,
     max_iterations: usize,
-    mut image: RgbImage,
+    buffer: RgbImage,
     gradient: Gradient,
     fractal_type: Fractal,
     out_name: &str,
 ) {
     let scale = 1.0 / (render_size.y as f64 / 2.0);
-    for y in  0..render_size.y {
-        for x in 0..render_size.x {
+    let image = Arc::new(Mutex::new(buffer));
+    (0..render_size.y).into_par_iter().for_each(|y| {
+        (0..render_size.x).into_par_iter().for_each(|x| {
             let pixel_x = (x as f64 - render_size.x as f64 / 2.0) * scale;
             let pixel_y = (y as f64 - render_size.y as f64 / 2.0) * scale;
 
@@ -102,13 +109,15 @@ fn render(
             let normalised_value = iterations as f64 / max_iterations as f64;
             let colour = gradient.at(normalised_value).to_rgba8();
 
+            let mut image = image.lock().unwrap();
             image.put_pixel(
                 x.try_into().unwrap(),
                 y.try_into().unwrap(),
                 Rgb([colour[0], colour[1], colour[2]]),
             );
-        }
-    }
+        });
+    });
 
+    let image = image.lock().unwrap();
     image.save(out_name).unwrap();
 }
