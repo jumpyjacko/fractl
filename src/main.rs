@@ -1,8 +1,9 @@
+use clap::{Arg, Command};
 use colorgrad::{Color, Gradient};
 use image::{ImageBuffer, Rgb, RgbImage};
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
-use std::{time::Instant};
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy)]
 struct Vec2 {
@@ -22,7 +23,89 @@ enum Fractal {
 }
 
 fn main() {
-    let image_size = IVec2 { x: 2560, y: 1440 };
+    // CLI setup
+    let matches = Command::new("fractl")
+        .version("0.1.0")
+        .author("Jackson Ly (JumpyJacko)")
+        .about("A small fractal renderer")
+        .arg(
+            Arg::new("fractal")
+                .short('f')
+                .long("fractal")
+                .default_value("julia")
+                .help("Fractal type (Julia, Mandelbrot)"),
+        )
+        .arg(
+            Arg::new("iterations")
+                .short('i')
+                .long("iterations")
+                .default_value("500")
+                .help("Amount of iterations"),
+        )
+        .arg(
+            Arg::new("width")
+                .short('w')
+                .long("width")
+                .default_value("1920")
+                .help("Width of output image"),
+        )
+        .arg(
+            Arg::new("height")
+                .short('v')
+                .long("height")
+                .default_value("1080")
+                .help("Height of output image"),
+        )
+        .arg(
+            Arg::new("name")
+                .short('o')
+                .long("output-name")
+                .default_value("output.png")
+                .help("Name of output image"),
+        )
+        .arg(
+            Arg::new("gradient")
+                .short('g')
+                .long("gradient")
+                .default_value("grayscale")
+                .help("Gradient to use for the output"),
+        )
+        .arg(
+            Arg::new("x_constant")
+                .short('x')
+                .long("x-constant")
+                .default_value("-0.8")
+                .help("Define a complex constant"),
+        )
+        .arg(
+            Arg::new("y_constant")
+                .short('y')
+                .long("y-constant")
+                .default_value("0.156")
+                .help("Define a complex constant"),
+        )
+        .arg(
+            Arg::new("zoom")
+                .short('z')
+                .long("zoom")
+                .default_value("1.0")
+                .help("Define a zoom/magnification to render at"),
+        )
+        .get_matches();
+
+    let image_size = IVec2 {
+        x: matches
+            .get_one::<String>("width")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap(),
+        y: matches
+            .get_one::<String>("height")
+            .unwrap()
+            .parse::<u64>()
+            .unwrap(),
+    };
+
     let grayscale = colorgrad::CustomGradient::new()
         .colors(&[
             Color::from_rgba8(0, 0, 0, 255),
@@ -30,24 +113,56 @@ fn main() {
         ])
         .build()
         .unwrap();
-    let output_buffer: RgbImage = ImageBuffer::new(
-        image_size.x.try_into().unwrap(),
-        image_size.y.try_into().unwrap(),
-    );
+
+    let gradient: Gradient = match matches
+        .get_one::<String>("gradient")
+        .unwrap()
+        .to_ascii_lowercase()
+        .trim()
+    {
+        "grayscale" => grayscale,
+        "rainbow" => colorgrad::rainbow(),
+        "inferno" => colorgrad::inferno(),
+        "viridis" => colorgrad::viridis(),
+        _ => {
+            println!("Please choose one of the following:\n - Grayscale\n - Rainbow\n - Inferno\n - Viridis");
+            return;
+        }
+    };
 
     // let constant = Vec2 { x: -0.4, y: 0.6};
-    let constant = Vec2 { x: -0.8, y: 0.156 };
+    // let constant = Vec2 { x: -0.8, y: 0.156 };
+    let constant = Vec2 {
+        x: matches.get_one::<String>("x_constant").unwrap().parse::<f64>().unwrap(),
+        y: matches.get_one::<String>("y_constant").unwrap().parse::<f64>().unwrap(),
+    };
+    let iterations = matches.get_one::<String>("iterations").unwrap().parse::<usize>().unwrap();
+    let zoom = matches.get_one::<String>("zoom").unwrap().parse::<f64>().unwrap();
+
+    let fractal_type = match matches
+        .get_one::<String>("fractal")
+        .unwrap()
+        .to_ascii_lowercase()
+        .trim()
+    {
+        "julia" => Fractal::Julia,
+        _ => {
+            println!("Please choose one of the following:\n - julia\n - mandelbrot");
+            return;
+        }
+    };
+
+    let out_name: &str = matches.get_one::<String>("name").unwrap();
 
     let timer = Instant::now();
     render(
         image_size,
         constant,
-        1.0,
-        500,
-        output_buffer,
-        grayscale,
-        Fractal::Julia,
-        "julia.png",
+        zoom,
+        iterations,
+        gradient,
+        fractal_type,
+        out_name,
     );
     let duration = timer.elapsed().as_millis();
     println!("calculation duration: {} ms", duration);
@@ -68,8 +183,16 @@ fn modulus_squared(z: Vec2) -> f64 {
 }
 
 // Zn = Zn-1 + C
-fn iterate_to_max_julia(initial_z: Vec2, constant: Vec2, fractal_zoom: f64, max_iterations: usize) -> usize {
-    let mut zn = Vec2 { x: initial_z.x / fractal_zoom, y: initial_z.y / fractal_zoom };
+fn iterate_to_max_julia(
+    initial_z: Vec2,
+    constant: Vec2,
+    fractal_zoom: f64,
+    max_iterations: usize,
+) -> usize {
+    let mut zn = Vec2 {
+        x: initial_z.x / fractal_zoom,
+        y: initial_z.y / fractal_zoom,
+    };
     let mut iteration = 0;
     while modulus_squared(zn) < 4.0 && iteration < max_iterations {
         zn = compute_next_julia(zn, constant);
@@ -84,11 +207,15 @@ fn render(
     constant: Vec2,
     fractal_zoom: f64,
     max_iterations: usize,
-    buffer: RgbImage,
     gradient: Gradient,
     fractal_type: Fractal,
     out_name: &str,
 ) {
+    let buffer: RgbImage = ImageBuffer::new(
+        render_size.x.try_into().unwrap(),
+        render_size.y.try_into().unwrap(),
+    );
+
     let scale = 1.0 / (render_size.y as f64 / 2.0);
     let image = Arc::new(Mutex::new(buffer));
     (0..render_size.y).into_par_iter().for_each(|y| {
