@@ -114,6 +114,14 @@ fn main() {
         .build()
         .unwrap();
 
+    let inv_grayscale = colorgrad::CustomGradient::new()
+        .colors(&[
+            Color::from_rgba8(255, 255, 255, 255),
+            Color::from_rgba8(0, 0, 0, 255),
+        ])
+        .build()
+        .unwrap();
+
     let gradient: Gradient = match matches
         .get_one::<String>("gradient")
         .unwrap()
@@ -121,23 +129,38 @@ fn main() {
         .trim()
     {
         "grayscale" => grayscale,
+        "inverted_grayscale" => inv_grayscale,
         "rainbow" => colorgrad::rainbow(),
         "inferno" => colorgrad::inferno(),
         "viridis" => colorgrad::viridis(),
         _ => {
-            println!("Please choose one of the following:\n - Grayscale\n - Rainbow\n - Inferno\n - Viridis");
+            println!("Please choose one of the following:\n - Grayscale\n - Inverted_grayscale\n - Rainbow\n - Inferno\n - Viridis");
             return;
         }
     };
 
-    // let constant = Vec2 { x: -0.4, y: 0.6};
-    // let constant = Vec2 { x: -0.8, y: 0.156 };
     let constant = Vec2 {
-        x: matches.get_one::<String>("x_constant").unwrap().parse::<f64>().unwrap(),
-        y: matches.get_one::<String>("y_constant").unwrap().parse::<f64>().unwrap(),
+        x: matches
+            .get_one::<String>("x_constant")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap(),
+        y: matches
+            .get_one::<String>("y_constant")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap(),
     };
-    let iterations = matches.get_one::<String>("iterations").unwrap().parse::<usize>().unwrap();
-    let zoom = matches.get_one::<String>("zoom").unwrap().parse::<f64>().unwrap();
+    let iterations = matches
+        .get_one::<String>("iterations")
+        .unwrap()
+        .parse::<usize>()
+        .unwrap();
+    let zoom = matches
+        .get_one::<String>("zoom")
+        .unwrap()
+        .parse::<f64>()
+        .unwrap();
 
     let fractal_type = match matches
         .get_one::<String>("fractal")
@@ -146,6 +169,7 @@ fn main() {
         .trim()
     {
         "julia" => Fractal::Julia,
+        "mandelbrot" => Fractal::Mandelbrot,
         _ => {
             println!("Please choose one of the following:\n - julia\n - mandelbrot");
             return;
@@ -168,7 +192,7 @@ fn main() {
     println!("calculation duration: {} ms", duration);
 }
 
-fn compute_next_julia(current: Vec2, constant: Vec2) -> Vec2 {
+fn compute_next(current: Vec2, constant: Vec2) -> Vec2 {
     let z_real = (current.x * current.x) - (current.y * current.y);
     let z_imaginary = 2.0 * current.x * current.y;
 
@@ -183,7 +207,7 @@ fn modulus_squared(z: Vec2) -> f64 {
 }
 
 // Zn = Zn-1 + C
-fn iterate_to_max_julia(
+fn iterate_to_max(
     initial_z: Vec2,
     constant: Vec2,
     fractal_zoom: f64,
@@ -195,7 +219,7 @@ fn iterate_to_max_julia(
     };
     let mut iteration = 0;
     while modulus_squared(zn) < 4.0 && iteration < max_iterations {
-        zn = compute_next_julia(zn, constant);
+        zn = compute_next(zn, constant);
         iteration += 1;
     }
 
@@ -224,7 +248,7 @@ fn render(
             let pixel_y = (y as f64 - render_size.y as f64 / 2.0) * scale;
 
             let iterations = match fractal_type {
-                Fractal::Julia => iterate_to_max_julia(
+                Fractal::Julia => iterate_to_max(
                     Vec2 {
                         x: pixel_x,
                         y: pixel_y,
@@ -233,7 +257,15 @@ fn render(
                     fractal_zoom,
                     max_iterations,
                 ),
-                _ => todo!(),
+                Fractal::Mandelbrot => iterate_to_max(
+                    Vec2 { x: 0.0, y: 0.0 },
+                    Vec2 {
+                        x: pixel_x,
+                        y: pixel_y,
+                    },
+                    fractal_zoom,
+                    max_iterations,
+                ),
             };
 
             let normalised_value = iterations as f64 / max_iterations as f64;
