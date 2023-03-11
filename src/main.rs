@@ -1,194 +1,51 @@
-use clap::{Arg, Command};
-use colorgrad::{Color, Gradient};
-use image::{ImageBuffer, Rgb, RgbImage};
+use colorgrad::Gradient;
+use image::{ImageBuffer, Rgb, RgbImage, EncodableLayout};
+use openh264::encoder::{Encoder, EncoderConfig};
 use rayon::prelude::*;
+
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use crate::cli_setup::UserVars;
+use crate::cli_setup::Fractal;
+
+mod cli_setup;
+
 #[derive(Debug, Clone, Copy)]
-struct Vec2 {
-    x: f64,
-    y: f64,
+pub struct Vec2 {
+    pub x: f64,
+    pub y: f64,
 }
 
 #[derive(Debug, Clone, Copy)]
-struct IVec2 {
-    x: u64,
-    y: u64,
+pub struct IVec2 {
+    pub x: u64,
+    pub y: u64,
 }
 
-enum Fractal {
-    Julia,
-    Mandelbrot,
-}
+
 
 fn main() {
-    // CLI setup
-    let matches = Command::new("fractl")
-        .version("0.1.0")
-        .author("Jackson Ly (JumpyJacko)")
-        .about("A small fractal renderer")
-        .arg(
-            Arg::new("fractal")
-                .short('f')
-                .long("fractal")
-                .default_value("julia")
-                .help("Fractal type (Julia, Mandelbrot)"),
-        )
-        .arg(
-            Arg::new("iterations")
-                .short('i')
-                .long("iterations")
-                .default_value("500")
-                .help("Amount of iterations"),
-        )
-        .arg(
-            Arg::new("width")
-                .short('w')
-                .long("width")
-                .default_value("1920")
-                .help("Width of output image"),
-        )
-        .arg(
-            Arg::new("height")
-                .short('v')
-                .long("height")
-                .default_value("1080")
-                .help("Height of output image"),
-        )
-        .arg(
-            Arg::new("name")
-                .short('o')
-                .long("output-name")
-                .default_value("output.png")
-                .help("Name of output image"),
-        )
-        .arg(
-            Arg::new("gradient")
-                .short('g')
-                .long("gradient")
-                .default_value("grayscale")
-                .help("Gradient to use for the output"),
-        )
-        .arg(
-            Arg::new("x_constant")
-                .short('x')
-                .long("x-constant")
-                .default_value("-0.8")
-                .help("Define a complex constant"),
-        )
-        .arg(
-            Arg::new("y_constant")
-                .short('y')
-                .long("y-constant")
-                .default_value("0.156")
-                .help("Define a complex constant"),
-        )
-        .arg(
-            Arg::new("zoom")
-                .short('z')
-                .long("zoom")
-                .default_value("1.0")
-                .help("Define a zoom/magnification to render at"),
-        )
-        .get_matches();
-
-    let image_size = IVec2 {
-        x: matches
-            .get_one::<String>("width")
-            .unwrap()
-            .parse::<u64>()
-            .unwrap(),
-        y: matches
-            .get_one::<String>("height")
-            .unwrap()
-            .parse::<u64>()
-            .unwrap(),
-    };
-
-    let grayscale = colorgrad::CustomGradient::new()
-        .colors(&[
-            Color::from_rgba8(0, 0, 0, 255),
-            Color::from_rgba8(255, 255, 255, 255),
-        ])
-        .build()
-        .unwrap();
-
-    let inv_grayscale = colorgrad::CustomGradient::new()
-        .colors(&[
-            Color::from_rgba8(255, 255, 255, 255),
-            Color::from_rgba8(0, 0, 0, 255),
-        ])
-        .build()
-        .unwrap();
-
-    let gradient: Gradient = match matches
-        .get_one::<String>("gradient")
-        .unwrap()
-        .to_ascii_lowercase()
-        .trim()
-    {
-        "grayscale" => grayscale,
-        "inverted_grayscale" => inv_grayscale,
-        "rainbow" => colorgrad::rainbow(),
-        "inferno" => colorgrad::inferno(),
-        "viridis" => colorgrad::viridis(),
-        _ => {
-            println!("Please choose one of the following:\n - Grayscale\n - Inverted_grayscale\n - Rainbow\n - Inferno\n - Viridis");
-            return;
-        }
-    };
-
-    let constant = Vec2 {
-        x: matches
-            .get_one::<String>("x_constant")
-            .unwrap()
-            .parse::<f64>()
-            .unwrap(),
-        y: matches
-            .get_one::<String>("y_constant")
-            .unwrap()
-            .parse::<f64>()
-            .unwrap(),
-    };
-    let iterations = matches
-        .get_one::<String>("iterations")
-        .unwrap()
-        .parse::<usize>()
-        .unwrap();
-    let zoom = matches
-        .get_one::<String>("zoom")
-        .unwrap()
-        .parse::<f64>()
-        .unwrap();
-
-    let fractal_type = match matches
-        .get_one::<String>("fractal")
-        .unwrap()
-        .to_ascii_lowercase()
-        .trim()
-    {
-        "julia" => Fractal::Julia,
-        "mandelbrot" => Fractal::Mandelbrot,
-        _ => {
-            println!("Please choose one of the following:\n - julia\n - mandelbrot");
-            return;
-        }
-    };
-
-    let out_name: &str = matches.get_one::<String>("name").unwrap();
+    let user_vars = UserVars::new();
 
     let timer = Instant::now();
-    render(
-        image_size,
-        constant,
-        zoom,
-        iterations,
-        gradient,
-        fractal_type,
-        out_name,
+    let image = render(
+        user_vars.image_size,
+        user_vars.constant,
+        user_vars.zoom,
+        user_vars.iterations,
+        user_vars.gradient,
+        user_vars.fractal_type,
+        &user_vars.out_name,
     );
     let duration = timer.elapsed().as_millis();
+
+    if user_vars.out_type {
+        image.save(user_vars.out_name).unwrap();
+    } else {
+        render_video();
+    }
+    
     println!("calculation duration: {} ms", duration);
 }
 
@@ -234,7 +91,7 @@ fn render(
     gradient: Gradient,
     fractal_type: Fractal,
     out_name: &str,
-) {
+) -> RgbImage {
     let buffer: RgbImage = ImageBuffer::new(
         render_size.x.try_into().unwrap(),
         render_size.y.try_into().unwrap(),
@@ -280,6 +137,11 @@ fn render(
         });
     });
 
-    let image = image.lock().unwrap();
-    image.save(out_name).unwrap();
+   let image = &*image.lock().unwrap();
+
+    return image.to_owned();
+}
+
+fn render_video() {
+    todo!();
 }
