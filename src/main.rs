@@ -1,13 +1,12 @@
 use colorgrad::Gradient;
-use image::{ImageBuffer, Rgb, RgbImage, EncodableLayout};
-use openh264::encoder::{Encoder, EncoderConfig};
+use image::{ImageBuffer, Rgb, RgbImage};
 use rayon::prelude::*;
 
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use crate::cli_setup::UserVars;
 use crate::cli_setup::Fractal;
+use crate::cli_setup::UserVars;
 
 mod cli_setup;
 
@@ -22,9 +21,6 @@ pub struct IVec2 {
     pub x: u64,
     pub y: u64,
 }
-
-
-
 fn main() {
     let user_vars = UserVars::new();
 
@@ -33,29 +29,35 @@ fn main() {
         user_vars.image_size,
         user_vars.constant,
         user_vars.zoom,
+        user_vars.zoom_coords,
         user_vars.iterations,
         user_vars.gradient,
         user_vars.fractal_type,
-        &user_vars.out_name,
     );
     let duration = timer.elapsed().as_millis();
 
-    if user_vars.out_type {
-        image.save(user_vars.out_name).unwrap();
-    } else {
-        render_video();
-    }
-    
+    image.save(user_vars.out_name).unwrap();
+
     println!("calculation duration: {} ms", duration);
 }
 
-fn compute_next(current: Vec2, constant: Vec2) -> Vec2 {
+fn compute_next_julia(current: Vec2, constant: Vec2) -> Vec2 {
     let z_real = (current.x * current.x) - (current.y * current.y);
     let z_imaginary = 2.0 * current.x * current.y;
 
     Vec2 {
         x: z_real + constant.x,
         y: z_imaginary + constant.y,
+    }
+}
+
+fn compute_next_mandelbrot(current: Vec2, constant: Vec2, zoom: f64) -> Vec2 {
+    let z_real = (current.x * current.x) - (current.y * current.y);
+    let z_imaginary = 2.0 * current.x * current.y;
+
+    Vec2 {
+        x: z_real + constant.x / zoom,
+        y: z_imaginary + constant.y / zoom,
     }
 }
 
@@ -68,15 +70,27 @@ fn iterate_to_max(
     initial_z: Vec2,
     constant: Vec2,
     fractal_zoom: f64,
+    fractal_type: Fractal,
     max_iterations: usize,
 ) -> usize {
-    let mut zn = Vec2 {
-        x: initial_z.x / fractal_zoom,
-        y: initial_z.y / fractal_zoom,
+    let mut zn = match fractal_type {
+        Fractal::Julia => Vec2 {
+            x: initial_z.x / fractal_zoom,
+            y: initial_z.y / fractal_zoom,
+        },
+
+        Fractal::Mandelbrot => Vec2 {
+            x: initial_z.x,
+            y: initial_z.y,
+        },
     };
+
     let mut iteration = 0;
     while modulus_squared(zn) < 4.0 && iteration < max_iterations {
-        zn = compute_next(zn, constant);
+        zn = match fractal_type {
+            Fractal::Julia => compute_next_julia(zn, constant),
+            Fractal::Mandelbrot => compute_next_mandelbrot(zn, constant, fractal_zoom),
+        };
         iteration += 1;
     }
 
@@ -87,10 +101,10 @@ fn render(
     render_size: IVec2,
     constant: Vec2,
     fractal_zoom: f64,
+    zoom_coords: Vec2,
     max_iterations: usize,
     gradient: Gradient,
     fractal_type: Fractal,
-    out_name: &str,
 ) -> RgbImage {
     let buffer: RgbImage = ImageBuffer::new(
         render_size.x.try_into().unwrap(),
@@ -101,8 +115,11 @@ fn render(
     let image = Arc::new(Mutex::new(buffer));
     (0..render_size.y).into_par_iter().for_each(|y| {
         (0..render_size.x).into_par_iter().for_each(|x| {
-            let pixel_x = (x as f64 - render_size.x as f64 / 2.0) * scale;
-            let pixel_y = (y as f64 - render_size.y as f64 / 2.0) * scale;
+            let pixel_x =
+                ((x as f64 - render_size.x as f64 / 2.0) * scale) + zoom_coords.x * fractal_zoom;
+            let pixel_y =
+                ((y as f64 - render_size.y as f64 / 2.0) * scale) + zoom_coords.y * fractal_zoom;
+            // println!("for ({}, {}), it gave: {}, {}", x, y, pixel_x, pixel_y);
 
             let iterations = match fractal_type {
                 Fractal::Julia => iterate_to_max(
@@ -112,6 +129,7 @@ fn render(
                     },
                     constant,
                     fractal_zoom,
+                    Fractal::Julia,
                     max_iterations,
                 ),
                 Fractal::Mandelbrot => iterate_to_max(
@@ -121,6 +139,7 @@ fn render(
                         y: pixel_y,
                     },
                     fractal_zoom,
+                    Fractal::Mandelbrot,
                     max_iterations,
                 ),
             };
@@ -137,11 +156,7 @@ fn render(
         });
     });
 
-   let image = &*image.lock().unwrap();
+    let image = &*image.lock().unwrap();
 
-    return image.to_owned();
-}
-
-fn render_video() {
-    todo!();
+    image.to_owned()
 }

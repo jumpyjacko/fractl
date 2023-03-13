@@ -16,14 +16,14 @@ pub struct UserVars {
     pub constant: Vec2,
     pub iterations: usize,
     pub zoom: f64,
+    pub zoom_coords: Vec2,
     pub fractal_type: Fractal,
-    pub out_type: bool,
     pub out_name: String,
 }
 
 impl UserVars {
     pub fn new() -> UserVars {
-        return setup_cli();
+        setup_cli()
     }
 }
 
@@ -68,12 +68,6 @@ fn setup_cli() -> UserVars {
                 .help("Name of output image"),
         )
         .arg(
-            Arg::new("out_type")
-                .long("output-type")
-                .default_value("image")
-                .help("Type of output (image or video)"),
-        )
-        .arg(
             Arg::new("gradient")
                 .short('g')
                 .long("gradient")
@@ -100,6 +94,18 @@ fn setup_cli() -> UserVars {
                 .long("zoom")
                 .default_value("1.0")
                 .help("Define a zoom/magnification to render at"),
+        )
+        .arg(
+            Arg::new("x_zoom")
+                .long("x-zoom")
+                .default_value("0.0")
+                .help("Define a coordinate render at"),
+        )
+        .arg(
+            Arg::new("y_zoom")
+                .long("y-zoom")
+                .default_value("0.0")
+                .help("Define a coordinate to render at"),
         )
         .get_matches();
 
@@ -171,18 +177,17 @@ fn setup_cli() -> UserVars {
         .unwrap()
         .parse::<f64>()
         .unwrap();
-    let out_type = match matches
-        .get_one::<String>("out_type")
-        .unwrap()
-        .to_ascii_lowercase()
-        .trim()
-    {
-        "image" => true,
-        "video" => false,
-        _ => {
-            println!("Please choose either 'image' or 'video'");
-            panic!();
-        }
+    let zoom_coords = Vec2 {
+        x: matches
+            .get_one::<String>("x_zoom")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap(),
+        y: matches
+            .get_one::<String>("y_zoom")
+            .unwrap()
+            .parse::<f64>()
+            .unwrap(),
     };
 
     let fractal_type = match matches
@@ -194,7 +199,7 @@ fn setup_cli() -> UserVars {
         "julia" => Fractal::Julia,
         "mandelbrot" => Fractal::Mandelbrot,
         _ => {
-            println!("Please choose one of the following:\n - julia\n - mandelbrot");
+            println!("Please choose one of the following:\n - Julia\n - Mandelbrot");
             panic!();
         }
     };
@@ -207,8 +212,8 @@ fn setup_cli() -> UserVars {
         constant,
         iterations,
         zoom,
+        zoom_coords,
         fractal_type,
-        out_type,
         out_name: out_name.to_owned(),
     }
 }
