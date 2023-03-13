@@ -8,6 +8,9 @@ A simple fractal render from the comfort of your own terminal.
 `./fractl --x-constant=-0.4 -y 0.6`
 ![flowers](./images/flowers.png)
 
+`./fractl -f mandelbrot --x-zoom=-0.745 --y-zoom=0.115 -z 150.0 -g inferno`
+![seahorse_valley](./images/seahorse_valley.png)
+
 `./fractl --help`
 ```
 A small fractal renderer
