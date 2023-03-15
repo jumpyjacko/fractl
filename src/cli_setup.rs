@@ -7,6 +7,7 @@ use crate::{IVec2, Vec2};
 
 pub enum Fractal {
     Julia,
+    JuliaCubed,
     Mandelbrot,
 }
 
@@ -37,7 +38,7 @@ fn setup_cli() -> UserVars {
                 .short('f')
                 .long("fractal")
                 .default_value("julia")
-                .help("Fractal type (Julia, Mandelbrot)"),
+                .help("Fractal type"),
         )
         .arg(
             Arg::new("iterations")
@@ -197,9 +198,10 @@ fn setup_cli() -> UserVars {
         .trim()
     {
         "julia" => Fractal::Julia,
+        "juliacubed" => Fractal::JuliaCubed,
         "mandelbrot" => Fractal::Mandelbrot,
         _ => {
-            println!("Please choose one of the following:\n - Julia\n - Mandelbrot");
+            println!("Please choose one of the following:\n - Julia\n - Juliacubed\n - Mandelbrot\n");
             panic!();
         }
     };

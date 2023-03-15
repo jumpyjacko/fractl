@@ -51,6 +51,16 @@ fn compute_next_julia(current: Vec2, constant: Vec2) -> Vec2 {
     }
 }
 
+fn compute_next_juliacubed(current: Vec2, constant: Vec2) -> Vec2 {
+    let z_real = (current.x * current.x * current.x) - (3.0 * current.x * current.y * current.y);
+    let z_imaginary = (3.0 * current.x * current.x * current.y) - (current.y * current.y * current.y);
+
+    Vec2 {
+        x: z_real + constant.x,
+        y: z_imaginary + constant.y,
+    }
+}
+
 fn compute_next_mandelbrot(current: Vec2, constant: Vec2, zoom: f64) -> Vec2 {
     let z_real = (current.x * current.x) - (current.y * current.y);
     let z_imaginary = 2.0 * current.x * current.y;
@@ -74,11 +84,10 @@ fn iterate_to_max(
     max_iterations: usize,
 ) -> usize {
     let mut zn = match fractal_type {
-        Fractal::Julia => Vec2 {
+        Fractal::Julia | Fractal::JuliaCubed => Vec2 {
             x: initial_z.x / fractal_zoom,
             y: initial_z.y / fractal_zoom,
         },
-
         Fractal::Mandelbrot => Vec2 {
             x: initial_z.x,
             y: initial_z.y,
@@ -89,6 +98,7 @@ fn iterate_to_max(
     while modulus_squared(zn) < 4.0 && iteration < max_iterations {
         zn = match fractal_type {
             Fractal::Julia => compute_next_julia(zn, constant),
+            Fractal::JuliaCubed => compute_next_juliacubed(zn, constant),
             Fractal::Mandelbrot => compute_next_mandelbrot(zn, constant, fractal_zoom),
         };
         iteration += 1;
@@ -130,6 +140,16 @@ fn render(
                     constant,
                     fractal_zoom,
                     Fractal::Julia,
+                    max_iterations,
+                ),
+                Fractal::JuliaCubed => iterate_to_max(
+                    Vec2 {
+                        x: pixel_x,
+                        y: pixel_y,
+                    },
+                    constant,
+                    fractal_zoom,
+                    Fractal::JuliaCubed,
                     max_iterations,
                 ),
                 Fractal::Mandelbrot => iterate_to_max(
