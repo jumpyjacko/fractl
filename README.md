@@ -1,5 +1,6 @@
-# fraCTL
+# fractl
 A simple fractal render from the comfort of your own terminal.
+Name comes from 'fractal control' where the 'ctl' is from a software naming convention.
 
 ### How to use
 `./fractl`
@@ -18,7 +19,7 @@ A small fractal renderer
 Usage: ./fractl [OPTIONS]
 
 Options:
-  -f, --fractal <fractal>        Fractal type (Julia, Mandelbrot) [default: julia]
+  -f, --fractal <fractal>        Fractal type [default: julia]
   -i, --iterations <iterations>  Amount of iterations [default: 500]
   -w, --width <width>            Width of output image [default: 1920]
   -v, --height <height>          Height of output image [default: 1080]
